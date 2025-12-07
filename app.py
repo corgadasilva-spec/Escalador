@@ -8,7 +8,7 @@ import calendar
 # CONFIGURAÇÃO INICIAL
 # ==========================================
 st.set_page_config(page_title="Gestão de Escalas - Pro", layout="wide")
-st.title("🏥 Gestor de Escalas: Pedidos vs Obrigações")
+st.title("🏥 Gestor de Escalas: Versão Estável")
 
 # --- BARRA LATERAL ---
 with st.sidebar:
@@ -59,7 +59,7 @@ with tab_equipa:
     
     col_config_med = {
         "pref_24h": st.column_config.CheckboxColumn("Prefere 24h?", default=False),
-        "contrato": st.column_config.NumberColumn("H. Contrato", format="%d h")
+        "contrato": st.column_config.NumberColumn("H. Contrato", format="%d h", default=0) # Default adicionado
     }
     
     df_medicos = st.data_editor(pd.DataFrame(default_medicos), column_config=col_config_med, num_rows="dynamic", use_container_width=True)
@@ -89,8 +89,8 @@ if col_act.button("🚀 GERAR ESCALA INTELIGENTE", type="primary"):
     medicos = df_medicos[df_medicos["ativo"] == True].reset_index().to_dict('records')
     
     # Separar Hard (Obrigatório) de Soft (Pedido)
-    hard_ausencias = {} # (Nome, Dia) -> Tipo
-    soft_pedidos = []   # Lista de (Nome, Dia)
+    hard_ausencias = {} 
+    soft_pedidos = []   
     
     for _, row in df_ausencias.iterrows():
         if row['tipo'] in ['Férias', 'CIT', 'CGS']:
@@ -115,11 +115,11 @@ if col_act.button("🚀 GERAR ESCALA INTELIGENTE", type="primary"):
         for d_idx, _ in enumerate(datas):
             dia = d_idx + 1
             shifts_24h[(m['index'], dia)] = model.NewBoolVar(f"is_24h_{m['index']}_{dia}")
-            # Correção de linhas quebradas
+            # Link lógico corrigido
             model.Add(shifts[(m['index'], dia, 'DIA')] + shifts[(m['index'], dia, 'NOITE')] == 2).OnlyEnforceIf(shifts_24h[(m['index'], dia)])
             model.Add(shifts[(m['index'], dia, 'DIA')] + shifts[(m['index'], dia, 'NOITE')] < 2).OnlyEnforceIf(shifts_24h[(m['index'], dia)].Not())
 
-    # --- REGRAS HARD (Não podem ser quebradas) ---
+    # --- REGRAS HARD ---
     
     semanas = {}
     for d_idx, data_obj in enumerate(datas):
@@ -131,7 +131,7 @@ if col_act.button("🚀 GERAR ESCALA INTELIGENTE", type="primary"):
         dia = d_idx + 1
         is_weekend = data_obj.weekday() >= 5
         
-        # 1. Staff Mínimo (A Regra de Ouro)
+        # 1. Staff Mínimo
         model.Add(sum(shifts[(m['index'], dia, 'DIA')] for m in medicos) == num_dia)
         model.Add(sum(shifts[(m['index'], dia, 'NOITE')] for m in medicos) == num_noite)
         
@@ -171,19 +171,19 @@ if col_act.button("🚀 GERAR ESCALA INTELIGENTE", type="primary"):
             trabalhou_amanha = sum(shifts[(m['index'], dia+1, t)] for t in turnos)
             model.Add(trabalhou_noite + trabalhou_amanha <= 1)
 
-    # --- FUNÇÃO OBJETIVO (Soft Constraints) ---
+    # --- FUNÇÃO OBJETIVO ---
     obj_terms = []
     
     for m in medicos:
         for d_idx, _ in enumerate(datas):
             dia = d_idx + 1
             
-            # A. PENALIZAÇÃO PEDIDO FOLGA
+            # Penalização Pedido Folga
             if (m['nome'], dia) in soft_pedidos:
                 trabalha_hoje = sum(shifts[(m['index'], dia, t)] for t in turnos)
                 obj_terms.append(trabalha_hoje * -1000)
 
-            # B. BÓNUS PREFERÊNCIA 24h
+            # Bónus 24h
             if m['pref_24h']:
                 obj_terms.append(shifts_24h[(m['index'], dia)] * 50)
             else:
@@ -238,7 +238,13 @@ if col_act.button("🚀 GERAR ESCALA INTELIGENTE", type="primary"):
 
                 row[str(dia)] = label
             
-            horas_contrato_mes = m['contrato'] * 4 
+            # --- CORREÇÃO DO ERRO AQUI ---
+            # Garante que contrato é número. Se for vazio, assume 0.
+            contrato_val = m.get('contrato')
+            if contrato_val is None:
+                contrato_val = 0
+            
+            horas_contrato_mes = contrato_val * 4 
             horas_extra = horas_totais - horas_contrato_mes
             
             dados_grelha.append(row)
