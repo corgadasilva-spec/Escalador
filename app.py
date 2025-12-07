@@ -7,8 +7,8 @@ import calendar
 # ==========================================
 # CONFIGURAÇÃO INICIAL
 # ==========================================
-st.set_page_config(page_title="Gestor Escalas - Versão Final 24h", layout="wide")
-st.title("🏥 Gestor de Escalas: Prioridade 24h & Equidade")
+st.set_page_config(page_title="Gestor Escalas - Real", layout="wide")
+st.title("🏥 Gestor de Escalas: Equipas A, B, C, D")
 
 # --- BARRA LATERAL ---
 with st.sidebar:
@@ -17,15 +17,15 @@ with st.sidebar:
     mes = st.selectbox("Mês", range(1, 13), index=0)
     
     st.divider()
-    st.header("⚙️ Staff (Regra dos 3)")
+    st.header("⚙️ Definição de Vagas")
     num_noite = st.number_input("Nº Médicos Noite", value=3)
     num_dia = st.number_input("Nº Médicos Dia (12h)", value=3)
-    num_manha = st.number_input("Nº Médicos Manhã", value=3)
+    num_manha = st.number_input("Nº Médicos Manhã", value=2)
     
     st.divider()
-    st.header("⚖️ Limites de Segurança")
+    st.header("⚖️ Regras")
     max_noites_semana = st.number_input("Máx. Noites/Semana", value=2)
-    max_turnos_semana = st.number_input("Máx. Turnos/Semana (DN=2)", value=5)
+    max_turnos_semana = st.number_input("Máx. Turnos/Semana", value=5)
     regra_fds_unico = st.checkbox("🚫 Fim de Semana '1 Tiro'", value=True)
 
 # Calcular dias
@@ -33,44 +33,55 @@ num_days = calendar.monthrange(ano, mes)[1]
 datas = [date(ano, mes, day) for day in range(1, num_days + 1)]
 
 # ==========================================
-# 1. INPUT DE DADOS
+# 1. INPUT DE DADOS (DADOS REAIS DA IMAGEM)
 # ==========================================
-tab_equipa, tab_ausencias = st.tabs(["👥 Equipa (Quem quer 24h?)", "✈️ Ausências"])
+tab_equipa, tab_ausencias = st.tabs(["👥 Equipa Real", "✈️ Ausências"])
 
 with tab_equipa:
-    st.markdown("**Instrução:** Marque a caixa `Prefere 24h` para quem deve fazer D+N seguido.")
+    st.info("Lista carregada conforme imagem enviada (Equipas A, B, C, D - 40h).")
+    
+    # Transcrição da imagem
+    # Assumi que os nomes a VERMELHO na imagem preferem 24h
     default_medicos = [
-        {"nome": "Dr. Silva", "equipa": "A", "contrato": 40, "pref_24h": True, "ativo": True},
-        {"nome": "Dra. Ana", "equipa": "B", "contrato": 40, "pref_24h": False, "ativo": True},
-        {"nome": "Dr. Costa", "equipa": "C", "contrato": 40, "pref_24h": True, "ativo": True},
-        {"nome": "Dr. Ferreira", "equipa": "A", "contrato": 40, "pref_24h": True, "ativo": True},
-        {"nome": "Dra. Beatriz", "equipa": "B", "contrato": 40, "pref_24h": False, "ativo": True},
-        {"nome": "Dr. Miguel", "equipa": "A", "contrato": 40, "pref_24h": True, "ativo": True},
-        {"nome": "Dr. Pedro", "equipa": "B", "contrato": 40, "pref_24h": False, "ativo": True},
-        {"nome": "Dra. Sofia", "equipa": "C", "contrato": 40, "pref_24h": True, "ativo": True},
-        {"nome": "Dra. Joana", "equipa": "C", "contrato": 40, "pref_24h": True, "ativo": True},
-        {"nome": "Dr. Rui", "equipa": "Rot", "contrato": 40, "pref_24h": False, "ativo": True},
-        {"nome": "Dra. Marta", "equipa": "Rot", "contrato": 40, "pref_24h": False, "ativo": True},
-        {"nome": "Dr. Tiago", "equipa": "Rot", "contrato": 40, "pref_24h": True, "ativo": True},
-        {"nome": "Dra. Inês", "equipa": "Rot", "contrato": 40, "pref_24h": False, "ativo": True},
-        {"nome": "Dr. Bruno", "equipa": "Rot", "contrato": 40, "pref_24h": True, "ativo": True},
-        {"nome": "Dr. Lucas", "equipa": "Rot", "contrato": 40, "pref_24h": False, "ativo": True},
-        {"nome": "Dra. Carla", "equipa": "Rot", "contrato": 40, "pref_24h": True, "ativo": True},
-        {"nome": "Dr. Tarefeiro 1", "equipa": "Ext", "contrato": 0, "pref_24h": True, "ativo": True},
-        {"nome": "Dr. Tarefeiro 2", "equipa": "Ext", "contrato": 0, "pref_24h": True, "ativo": True},
-        {"nome": "Dr. Tarefeiro 3", "equipa": "Ext", "contrato": 0, "pref_24h": True, "ativo": True},
-        {"nome": "Dr. Tarefeiro 4", "equipa": "Ext", "contrato": 0, "pref_24h": True, "ativo": True},
+        # EQUIPA A
+        {"nome": "Joana Esteves", "equipa": "A", "contrato": 40, "pref_24h": False, "ativo": True},
+        {"nome": "Andriy Bal", "equipa": "A", "contrato": 40, "pref_24h": False, "ativo": True},
+        {"nome": "Daniela Alves", "equipa": "A", "contrato": 40, "pref_24h": False, "ativo": True},
+        {"nome": "André Colmente", "equipa": "A", "contrato": 40, "pref_24h": False, "ativo": True},
+        {"nome": "Pedro Moura", "equipa": "A", "contrato": 40, "pref_24h": True, "ativo": True}, # Vermelho
+        {"nome": "Miguel Romano", "equipa": "A", "contrato": 40, "pref_24h": True, "ativo": True}, # Vermelho
+        
+        # EQUIPA B
+        {"nome": "Diogo Alves", "equipa": "B", "contrato": 40, "pref_24h": False, "ativo": True},
+        {"nome": "Miguel Morgado", "equipa": "B", "contrato": 40, "pref_24h": False, "ativo": True},
+        {"nome": "Sérgio Lascasas", "equipa": "B", "contrato": 40, "pref_24h": True, "ativo": True}, # Vermelho
+        {"nome": "José Miguel Sá", "equipa": "B", "contrato": 40, "pref_24h": False, "ativo": True},
+        {"nome": "Joana S. Braga", "equipa": "B", "contrato": 40, "pref_24h": True, "ativo": True}, # Vermelho
+        
+        # EQUIPA C
+        {"nome": "Rogério Silva", "equipa": "C", "contrato": 40, "pref_24h": False, "ativo": True},
+        {"nome": "Rita Passos", "equipa": "C", "contrato": 40, "pref_24h": False, "ativo": True},
+        {"nome": "Caldeiro", "equipa": "C", "contrato": 40, "pref_24h": True, "ativo": True}, # Vermelho
+        {"nome": "Francisco Silva", "equipa": "C", "contrato": 40, "pref_24h": False, "ativo": True},
+        
+        # EQUIPA D
+        {"nome": "Edite Mendes", "equipa": "D", "contrato": 40, "pref_24h": False, "ativo": True},
+        {"nome": "Énio Pereira", "equipa": "D", "contrato": 40, "pref_24h": False, "ativo": True},
+        {"nome": "Vitor Costa", "equipa": "D", "contrato": 40, "pref_24h": True, "ativo": True}, # Vermelho
+        {"nome": "Soraia Oliveira", "equipa": "D", "contrato": 40, "pref_24h": False, "ativo": True},
+        {"nome": "Joana G. Braga", "equipa": "D", "contrato": 40, "pref_24h": False, "ativo": True},
     ]
     
     col_config_med = {
         "pref_24h": st.column_config.CheckboxColumn("Prefere 24h?", default=False),
-        "contrato": st.column_config.NumberColumn("H. Contrato", format="%d h", default=0)
+        "contrato": st.column_config.NumberColumn("H. Contrato", format="%d h", default=40)
     }
     
     df_medicos = st.data_editor(pd.DataFrame(default_medicos), column_config=col_config_med, num_rows="dynamic", use_container_width=True)
 
 with tab_ausencias:
-    default_aus = [{"nome": "Dr. Silva", "dia": 1, "tipo": "Férias"}]
+    st.markdown("**Regras:** Férias/CIT bloqueiam dia.")
+    default_aus = [{"nome": "Joana Esteves", "dia": 1, "tipo": "Férias"}]
     col_config_aus = {
         "tipo": st.column_config.SelectboxColumn("Motivo", options=["Férias", "CIT", "CGS", "Pedido"], required=True),
         "dia": st.column_config.NumberColumn("Dia do Mês", min_value=1, max_value=31)
@@ -82,7 +93,7 @@ with tab_ausencias:
 # ==========================================
 st.divider()
 col_act, _ = st.columns([1, 4])
-if col_act.button("🚀 GERAR ESCALA (PRIORIDADE 24H)", type="primary"):
+if col_act.button("🚀 GERAR ESCALA (EQUIPAS REAIS)", type="primary"):
     
     # 1. Preparação
     medicos = df_medicos[df_medicos["ativo"] == True].reset_index().to_dict('records')
@@ -106,28 +117,28 @@ if col_act.button("🚀 GERAR ESCALA (PRIORIDADE 24H)", type="primary"):
             for t in turnos:
                 shifts[(m['index'], dia, t)] = model.NewBoolVar(f"s_{m['index']}_{dia}_{t}")
 
-    # Variáveis Auxiliares 24h - CÓDIGO SEGURO
+    # Variáveis 24h (CÓDIGO SEGURO E CORRIGIDO)
     shifts_24h = {}
     for m in medicos:
         for d_idx, _ in enumerate(datas):
             dia = d_idx + 1
             shifts_24h[(m['index'], dia)] = model.NewBoolVar(f"is_24h_{m['index']}_{dia}")
             
-            # Atalhos para evitar linhas longas
-            t_dia = shifts[(m['index'], dia, 'DIA')]
-            t_noite = shifts[(m['index'], dia, 'NOITE')]
-            var_24h = shifts_24h[(m['index'], dia)]
+            # Definição segura para evitar erro de sintaxe
+            turnos_dia_noite = shifts[(m['index'], dia, 'DIA')] + shifts[(m['index'], dia, 'NOITE')]
+            var_is_24h = shifts_24h[(m['index'], dia)]
             
-            # Lógica corrigida e partida em linhas menores
-            model.Add(t_dia + t_noite == 2).OnlyEnforceIf(var_24h)
-            model.Add(t_dia + t_noite < 2).OnlyEnforceIf(var_24h.Not())
+            # Se a soma for 2 (Dia+Noite), então é 24h
+            model.Add(turnos_dia_noite == 2).OnlyEnforceIf(var_is_24h)
+            # Se a soma for < 2, não é 24h
+            model.Add(turnos_dia_noite < 2).OnlyEnforceIf(var_is_24h.Not())
 
     # --- REGRAS HARD ---
     for d_idx, data_obj in enumerate(datas):
         dia = d_idx + 1
         is_weekend = data_obj.weekday() >= 5
         
-        # Staff Mínimo
+        # Staff
         model.Add(sum(shifts[(m['index'], dia, 'DIA')] for m in medicos) == num_dia)
         model.Add(sum(shifts[(m['index'], dia, 'NOITE')] for m in medicos) == num_noite)
         
@@ -175,67 +186,35 @@ if col_act.button("🚀 GERAR ESCALA (PRIORIDADE 24H)", type="primary"):
             turnos_janela = sum(shifts[(m['index'], d_idx + k + 1, t)] for k in range(7) for t in turnos)
             model.Add(turnos_janela <= max_turnos_semana)
 
-    # --- OBJETIVO: PESOS E EQUIDADE ---
-    total_noites_medico = []
-    total_fds_medico = []
-    
-    # Contadores
-    for m in medicos:
-        # Noites
-        n_noites = sum(shifts[(m['index'], d+1, 'NOITE')] for d in range(len(datas)))
-        n_var = model.NewIntVar(0, 31, f"n_noites_{m['index']}")
-        model.Add(n_var == n_noites)
-        total_noites_medico.append(n_var)
-        
-        # FDS
-        fds_vars = []
-        for d_idx in range(len(datas)):
-            if datas[d_idx].weekday() == 5: # Sábado
-                sab_idx = d_idx; dom_idx = d_idx + 1
-                if dom_idx < len(datas):
-                    t_sab = sum(shifts[(m['index'], sab_idx+1, t)] for t in turnos)
-                    t_dom = sum(shifts[(m['index'], dom_idx+1, t)] for t in turnos)
-                    trab_fds = t_sab + t_dom
-                    
-                    touched = model.NewBoolVar(f"fds_{m['index']}_{sab_idx}")
-                    model.Add(trab_fds > 0).OnlyEnforceIf(touched)
-                    model.Add(trab_fds == 0).OnlyEnforceIf(touched.Not())
-                    fds_vars.append(touched)
-        if fds_vars:
-            n_fds = sum(fds_vars)
-            f_var = model.NewIntVar(0, 5, f"n_fds_{m['index']}")
-            model.Add(f_var == n_fds)
-            total_fds_medico.append(f_var)
-
+    # --- OBJETIVO ---
     obj_terms = []
-
+    
     # 1. FORÇAR PREFERÊNCIA 24h
     for m in medicos:
         for d_idx, _ in enumerate(datas):
             dia = d_idx + 1
             if m['pref_24h']:
-                obj_terms.append(shifts_24h[(m['index'], dia)] * 2000)
+                obj_terms.append(shifts_24h[(m['index'], dia)] * 5000) # Prioridade MÁXIMA
             else:
-                obj_terms.append(shifts_24h[(m['index'], dia)] * -2000)
+                obj_terms.append(shifts_24h[(m['index'], dia)] * -5000)
             
             if (m['nome'], dia) in soft_pedidos:
                 trabalha = sum(shifts[(m['index'], dia, t)] for t in turnos)
-                obj_terms.append(trabalha * -5000)
+                obj_terms.append(trabalha * -10000)
 
-    # 2. Equidade de NOITES
-    max_noites = model.NewIntVar(0, 31, 'max_noites')
-    min_noites = model.NewIntVar(0, 31, 'min_noites')
-    model.AddMaxEquality(max_noites, total_noites_medico)
-    model.AddMinEquality(min_noites, total_noites_medico)
-    obj_terms.append((max_noites - min_noites) * -500)
-
-    # 3. Equidade de FDS
-    if total_fds_medico:
-        max_fds = model.NewIntVar(0, 5, 'max_fds')
-        min_fds = model.NewIntVar(0, 5, 'min_fds')
-        model.AddMaxEquality(max_fds, total_fds_medico)
-        model.AddMinEquality(min_fds, total_fds_medico)
-        obj_terms.append((max_fds - min_fds) * -500)
+    # 2. Equidade de NOITES (Nivelar)
+    total_noites = []
+    for m in medicos:
+        n = sum(shifts[(m['index'], d+1, 'NOITE')] for d in range(len(datas)))
+        v = model.NewIntVar(0, 31, f"n_{m['index']}")
+        model.Add(v == n)
+        total_noites.append(v)
+        
+    max_n = model.NewIntVar(0, 31, 'max_n')
+    min_n = model.NewIntVar(0, 31, 'min_n')
+    model.AddMaxEquality(max_n, total_noites)
+    model.AddMinEquality(min_n, total_noites)
+    obj_terms.append((max_n - min_n) * -500)
 
     model.Maximize(sum(obj_terms))
 
@@ -245,7 +224,7 @@ if col_act.button("🚀 GERAR ESCALA (PRIORIDADE 24H)", type="primary"):
     status = solver.Solve(model)
 
     if status in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-        st.success("✅ Escala Gerada! Preferências 24h aplicadas com força.")
+        st.success("✅ Escala Gerada com Sucesso!")
         
         dados_grelha = []
         stats = []
@@ -254,9 +233,8 @@ if col_act.button("🚀 GERAR ESCALA (PRIORIDADE 24H)", type="primary"):
         
         for idx, m in enumerate(medicos):
             row = {"Médico": m['nome'], "Eq": m['equipa']}
-            n_24h_real = 0; n_noites_real = 0
+            n_24h_real = 0; n_noites_real = 0; horas_totais = 0
             
-            horas_totais = 0
             for d_idx, _ in enumerate(datas):
                 dia = d_idx + 1
                 is_dia = solver.Value(shifts[(m['index'], dia, 'DIA')])
@@ -269,9 +247,54 @@ if col_act.button("🚀 GERAR ESCALA (PRIORIDADE 24H)", type="primary"):
                 elif is_noite: label = "N"; n_noites_real += 1; horas_totais += 12
                 elif is_manha: label = "M"; horas_totais += 6
                 
+                # Labels de ausência
                 if label == "":
                     if (m['nome'], dia) in hard_ausencias:
                         tipo = hard_ausencias[(m['nome'], dia)]
                         label = "FER" if tipo == "Férias" else ("CIT" if tipo == "CIT" else "CGS")
                     elif (m['nome'], dia) in soft_pedidos: label = "PED"
-                else
+                else:
+                    if (m['nome'], dia) in soft_pedidos: pedidos_recusados.append(f"{m['nome']} ({dia})")
+
+                row[str(dia)] = label
+
+            contrato_val = m.get('contrato') or 40
+            horas_extra = horas_totais - (contrato_val * 4)
+            
+            dados_grelha.append(row)
+            stats.append({
+                "Médico": m['nome'], 
+                "24h": n_24h_real,
+                "Noites Totais": n_noites_real + n_24h_real,
+                "Horas Extra": horas_extra
+            })
+
+        st.subheader(f"Mapa Mensal - {calendar.month_name[mes]} {ano}")
+        if pedidos_recusados: st.warning(f"Pedidos Recusados: {pedidos_recusados}")
+        
+        df_grelha = pd.DataFrame(dados_grelha)
+        
+        def highlight_cells(val):
+            style = ''
+            if val == 'DN': style = 'background-color: #ff4d4d; color: white; font-weight: bold'
+            elif val == 'N': style = 'background-color: #4da6ff; color: white'
+            elif val == 'D': style = 'background-color: #85e085; color: black'
+            elif val == 'M': style = 'background-color: #fff5cc; color: black'
+            elif val == 'FER': style = 'background-color: #ffd700; color: black'
+            elif val == 'CIT': style = 'background-color: #d8bfd8; color: black'
+            elif val == 'PED': style = 'background-color: #ccffcc; color: black; border: 2px dashed green'
+            return style
+
+        styler = df_grelha.style.applymap(highlight_cells)
+        styler.set_properties(subset=fds_cols, **{'background-color': '#e0e0e0', 'border-left': '2px solid #333', 'border-right': '2px solid #333'})
+        st.dataframe(styler, use_container_width=True)
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.subheader("📊 Contadores")
+            st.dataframe(pd.DataFrame(stats).set_index("Médico"), use_container_width=True)
+        with col2:
+            st.download_button("📥 Baixar CSV", df_grelha.to_csv().encode('utf-8'), "escala_real.csv")
+
+    else:
+        st.error("❌ Não foi possível gerar. Tente relaxar o 'Máx. Turnos/Semana' na barra lateral.")
