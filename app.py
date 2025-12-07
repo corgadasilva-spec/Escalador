@@ -7,8 +7,8 @@ import calendar
 # ==========================================
 # CONFIGURAÇÃO INICIAL
 # ==========================================
-st.set_page_config(page_title="Gestor Escalas - Equidade Total", layout="wide")
-st.title("🏥 Gestor de Escalas: Equidade & Distribuição Justa")
+st.set_page_config(page_title="Gestor Escalas - Equidade Granular", layout="wide")
+st.title("🏥 Gestor de Escalas: Distribuição Perfeita")
 
 # --- BARRA LATERAL ---
 with st.sidebar:
@@ -17,16 +17,17 @@ with st.sidebar:
     mes = st.selectbox("Mês", range(1, 13), index=0)
     
     st.divider()
-    st.header("⚙️ Regras de Staff (Tudo a 3)")
-    # Defaults alterados para 3 conforme pedido "todos os turnos têm de ter 3 médicos"
+    st.header("⚙️ Staff")
     num_noite = st.number_input("Nº Médicos Noite", value=3)
     num_dia = st.number_input("Nº Médicos Dia (12h)", value=3)
-    num_manha = st.number_input("Nº Médicos Manhã (Reforço)", value=3)
+    num_manha = st.number_input("Nº Médicos Manhã", value=3)
     
     st.divider()
-    st.header("⚖️ Regras de Justiça")
-    max_manhas_semana = st.number_input("Máx. Manhãs/Semana por médico", value=2)
-    usar_equipas = st.checkbox("🛡️ Proteger Equipas (Noites)", value=True)
+    st.header("⚖️ Regras de Equidade")
+    # NOVAS REGRAS DE CONTROLO
+    max_noites_semana = st.number_input("Máx. Noites/Semana (Rolling 7 dias)", value=2, help="Impede que alguém faça 3 noites em 7 dias.")
+    max_turnos_semana = st.number_input("Máx. Turnos Totais/Semana", value=4, help="Evita sobrecarga semanal.")
+    usar_equipas = st.checkbox("🛡️ Proteger Equipas", value=True)
     regra_fds_unico = st.checkbox("🚫 Fim de Semana '1 Tiro'", value=True)
 
 # Calcular dias
@@ -36,10 +37,10 @@ datas = [date(ano, mes, day) for day in range(1, num_days + 1)]
 # ==========================================
 # 1. INPUT DE DADOS
 # ==========================================
-tab_equipa, tab_ausencias = st.tabs(["👥 Equipa & Preferências", "✈️ Ausências & Pedidos"])
+tab_equipa, tab_ausencias = st.tabs(["👥 Equipa", "✈️ Ausências"])
 
 with tab_equipa:
-    st.info("💡 Dica: Para cobrir 3 pessoas em TODOS os turnos (D+N+M = 9 turnos/dia), precisa de uma equipa grande (~20+ médicos).")
+    st.info("💡 O algoritmo agora vai tentar que todos tenham o mesmo nº de Noites e FDS.")
     default_medicos = [
         {"nome": "Dr. Silva", "equipa": "A", "contrato": 40, "pref_24h": True, "ativo": True},
         {"nome": "Dra. Ana", "equipa": "B", "contrato": 40, "pref_24h": False, "ativo": True},
@@ -71,10 +72,7 @@ with tab_equipa:
     df_medicos = st.data_editor(pd.DataFrame(default_medicos), column_config=col_config_med, num_rows="dynamic", use_container_width=True)
 
 with tab_ausencias:
-    st.markdown("**Regras:** Férias/CIT bloqueiam. Pedidos tentam ser aceites.")
-    default_aus = [
-        {"nome": "Dr. Silva", "dia": 1, "tipo": "Férias"},
-    ]
+    default_aus = [{"nome": "Dr. Silva", "dia": 1, "tipo": "Férias"}]
     col_config_aus = {
         "tipo": st.column_config.SelectboxColumn("Motivo", options=["Férias", "CIT", "CGS", "Pedido"], required=True),
         "dia": st.column_config.NumberColumn("Dia do Mês", min_value=1, max_value=31)
@@ -86,9 +84,8 @@ with tab_ausencias:
 # ==========================================
 st.divider()
 col_act, _ = st.columns([1, 4])
-if col_act.button("🚀 GERAR ESCALA EQUITATIVA", type="primary"):
+if col_act.button("🚀 GERAR ESCALA EQUILIBRADA", type="primary"):
     
-    # 1. Preparação
     medicos = df_medicos[df_medicos["ativo"] == True].reset_index().to_dict('records')
     hard_ausencias = {} 
     soft_pedidos = []   
@@ -103,40 +100,30 @@ if col_act.button("🚀 GERAR ESCALA EQUITATIVA", type="primary"):
     shifts = {}
     turnos = ['DIA', 'NOITE', 'MANHA']
     
-    # 2. Variáveis de Decisão
+    # Variáveis
     for m in medicos:
         for d_idx, _ in enumerate(datas):
             dia = d_idx + 1
             for t in turnos:
                 shifts[(m['index'], dia, t)] = model.NewBoolVar(f"s_{m['index']}_{dia}_{t}")
 
-    # Variáveis Auxiliares (24h)
+    # Variáveis 24h
     shifts_24h = {}
     for m in medicos:
         for d_idx, _ in enumerate(datas):
             dia = d_idx + 1
             shifts_24h[(m['index'], dia)] = model.NewBoolVar(f"is_24h_{m['index']}_{dia}")
-            # Correção de sintaxe
             model.Add(shifts[(m['index'], dia, 'DIA')] + shifts[(m['index'], dia, 'NOITE')] == 2).OnlyEnforceIf(shifts_24h[(m['index'], dia)])
             model.Add(shifts[(m['index'], dia, 'DIA')] + shifts[(m['index'], dia, 'NOITE')] < 2).OnlyEnforceIf(shifts_24h[(m['index'], dia)].Not())
 
-    # --- REGRAS HARD (OBRIGATÓRIAS) ---
-    
-    semanas = {}
-    for d_idx, data_obj in enumerate(datas):
-        sem_key = data_obj.isocalendar()[:2] 
-        if sem_key not in semanas: semanas[sem_key] = []
-        semanas[sem_key].append(d_idx + 1)
-
+    # --- REGRAS HARD ---
     for d_idx, data_obj in enumerate(datas):
         dia = d_idx + 1
         is_weekend = data_obj.weekday() >= 5
         
-        # 1. STAFF MÍNIMO (Regra: Todos os turnos têm 3 médicos, ou o definido)
+        # Staff
         model.Add(sum(shifts[(m['index'], dia, 'DIA')] for m in medicos) == num_dia)
         model.Add(sum(shifts[(m['index'], dia, 'NOITE')] for m in medicos) == num_noite)
-        
-        # Manhã: Se for FDS é 0, se for semana é o número definido (ex: 3)
         if is_weekend:
             model.Add(sum(shifts[(m['index'], dia, 'MANHA')] for m in medicos) == 0)
         else:
@@ -147,7 +134,7 @@ if col_act.button("🚀 GERAR ESCALA EQUITATIVA", type="primary"):
             model.Add(shifts[(m['index'], dia, 'MANHA')] + shifts[(m['index'], dia, 'DIA')] <= 1)
             model.Add(shifts[(m['index'], dia, 'MANHA')] + shifts[(m['index'], dia, 'NOITE')] <= 1)
             
-            # Ausências Hard
+            # Ausências
             if (m['nome'], dia) in hard_ausencias:
                 for t in turnos:
                     model.Add(shifts[(m['index'], dia, t)] == 0)
@@ -162,64 +149,111 @@ if col_act.button("🚀 GERAR ESCALA EQUITATIVA", type="primary"):
                     domingo_tot = sum(shifts[(m['index'], dom, t)] for t in turnos)
                     model.Add(sexta_noite + sabado_tot + domingo_tot <= 1)
 
-    # Limites Semanais e Descanso
+    # --- NOVA LÓGICA DE EQUIDADE (JANELAS MÓVEIS) ---
     for m in medicos:
-        for sem_key, dias_da_semana in semanas.items():
-            model.Add(sum(shifts[(m['index'], d, 'MANHA')] for d in dias_da_semana) <= max_manhas_semana)
-
+        # Descanso Pós-Noite
         for d_idx in range(len(datas) - 1):
             dia = d_idx + 1
             trabalhou_noite = shifts[(m['index'], dia, 'NOITE')]
             trabalhou_amanha = sum(shifts[(m['index'], dia+1, t)] for t in turnos)
             model.Add(trabalhou_noite + trabalhou_amanha <= 1)
 
-    # --- MOTOR DE EQUIDADE (SOFT CONSTRAINTS) ---
-    # Aqui criamos variáveis para contar o total de horas de cada médico
-    # E dizemos ao Solver para minimizar a diferença entre o Max e o Min.
+        # 1. MÁXIMO NOITES POR SEMANA (Rolling Window 7 dias)
+        # Impede o "cluster" de noites (ex: 3 noites em 5 dias)
+        for d_idx in range(len(datas) - 6):
+            # Soma as noites nos próximos 7 dias
+            noites_janela = sum(shifts[(m['index'], d_idx + k + 1, 'NOITE')] for k in range(7))
+            model.Add(noites_janela <= max_noites_semana)
+
+        # 2. MÁXIMO TURNOS TOTAIS POR SEMANA (Evitar exaustão)
+        for d_idx in range(len(datas) - 6):
+            turnos_janela = sum(shifts[(m['index'], d_idx + k + 1, t)] for k in range(7) for t in turnos)
+            model.Add(turnos_janela <= max_turnos_semana)
+
+    # --- PREPARAÇÃO PARA OBJETIVO (CONTADORES) ---
+    # Vamos contar Noites e Fins de Semana para nivelar
+    total_noites_medico = []
+    total_fds_medico = []
     
-    total_horas_medico = []
+    # Identificar índices dos dias de FDS
+    indices_fds = [d_idx for d_idx, d in enumerate(datas) if d.weekday() >= 5]
     
     for m in medicos:
-        # Calcular horas deste médico no mês inteiro
-        horas_var = model.NewIntVar(0, 300, f"horas_{m['index']}")
+        # Contar Noites
+        n_noites = sum(shifts[(m['index'], d+1, 'NOITE')] for d in range(len(datas)))
+        n_var = model.NewIntVar(0, 31, f"n_noites_{m['index']}")
+        model.Add(n_var == n_noites)
+        total_noites_medico.append(n_var)
         
-        # Soma ponderada: Manhã=6, Dia=12, Noite=12
-        turnos_pesados = []
+        # Contar FDS Trabalhados (Se trabalha Sáb ou Dom, conta 1)
+        fds_vars = []
+        # Agrupar por Fim de Semana (Sábado + Domingo)
+        # Simplificação: Iterar pelos Sábados
         for d_idx in range(len(datas)):
-            dia = d_idx + 1
-            turnos_pesados.append(shifts[(m['index'], dia, 'MANHA')] * 6)
-            turnos_pesados.append(shifts[(m['index'], dia, 'DIA')] * 12)
-            turnos_pesados.append(shifts[(m['index'], dia, 'NOITE')] * 12)
+            if datas[d_idx].weekday() == 5: # Sábado
+                sab_idx = d_idx
+                dom_idx = d_idx + 1
+                if dom_idx < len(datas):
+                    # Trabalhou Sáb ou Dom?
+                    trabalhou_sab = sum(shifts[(m['index'], sab_idx+1, t)] for t in turnos)
+                    trabalhou_dom = sum(shifts[(m['index'], dom_idx+1, t)] for t in turnos)
+                    # Criar booleana: 1 se trabalhou no FDS
+                    touched_fds = model.NewBoolVar(f"fds_{m['index']}_{sab_idx}")
+                    model.Add(trabalhou_sab + trabalhou_dom > 0).OnlyEnforceIf(touched_fds)
+                    model.Add(trabalhou_sab + trabalhou_dom == 0).OnlyEnforceIf(touched_fds.Not())
+                    fds_vars.append(touched_fds)
         
-        model.Add(horas_var == sum(turnos_pesados))
-        total_horas_medico.append(horas_var)
+        if fds_vars:
+            n_fds = sum(fds_vars)
+            f_var = model.NewIntVar(0, 5, f"n_fds_{m['index']}")
+            model.Add(f_var == n_fds)
+            total_fds_medico.append(f_var)
 
-    # Variáveis para encontrar o Máximo e Mínimo de horas na equipa
-    max_horas_equipa = model.NewIntVar(0, 300, 'max_horas')
-    min_horas_equipa = model.NewIntVar(0, 300, 'min_horas')
-    
-    model.AddMaxEquality(max_horas_equipa, total_horas_medico)
-    model.AddMinEquality(min_horas_equipa, total_horas_medico)
-
-    # --- OBJETIVO FINAL ---
+    # --- OBJETIVO: NIVELAMENTO AGRESSIVO ---
     obj_terms = []
 
-    # 1. EQUIDADE (Prioridade Máxima): Minimizar (Max - Min)
-    # Multiplicamos por 200 para ser mais importante que preferências individuais
-    distancia_equidade = model.NewIntVar(0, 300, 'distancia')
-    model.Add(distancia_equidade == max_horas_equipa - min_horas_equipa)
-    obj_terms.append(distancia_equidade * -200) 
+    # 1. Equidade de NOITES (Minimizar desvio da média)
+    # Penalizar o quadrado da diferença (para punir outliers severamente) é difícil em CP-SAT linear.
+    # Vamos minimizar a diferença entre Max e Min Noites.
+    max_noites = model.NewIntVar(0, 31, 'max_noites')
+    min_noites = model.NewIntVar(0, 31, 'min_noites')
+    model.AddMaxEquality(max_noites, total_noites_medico)
+    model.AddMinEquality(min_noites, total_noites_medico)
+    obj_terms.append((max_noites - min_noites) * -500) # Peso muito alto
 
-    # 2. Preferências Individuais
+    # 2. Equidade de FINS DE SEMANA
+    if total_fds_medico:
+        max_fds = model.NewIntVar(0, 5, 'max_fds')
+        min_fds = model.NewIntVar(0, 5, 'min_fds')
+        model.AddMaxEquality(max_fds, total_fds_medico)
+        model.AddMinEquality(min_fds, total_fds_medico)
+        obj_terms.append((max_fds - min_fds) * -500)
+
+    # 3. Equidade de HORAS TOTAIS
+    # (Reutilizando lógica anterior para desempatar)
+    total_horas = []
+    for m in medicos:
+        h = sum(shifts[(m['index'], d+1, 'MANHA')]*6 + 
+                shifts[(m['index'], d+1, 'DIA')]*12 + 
+                shifts[(m['index'], d+1, 'NOITE')]*12 for d in range(len(datas)))
+        hv = model.NewIntVar(0, 300, f"h_{m['index']}")
+        model.Add(hv == h)
+        total_horas.append(hv)
+    
+    max_h = model.NewIntVar(0, 300, 'max_h')
+    min_h = model.NewIntVar(0, 300, 'min_h')
+    model.AddMaxEquality(max_h, total_horas)
+    model.AddMinEquality(min_h, total_horas)
+    obj_terms.append((max_h - min_h) * -100)
+
+    # 4. Preferências (Menor peso que a equidade)
     for m in medicos:
         for d_idx, _ in enumerate(datas):
             dia = d_idx + 1
-            # Pedido Folga (Soft)
             if (m['nome'], dia) in soft_pedidos:
                 trabalha = sum(shifts[(m['index'], dia, t)] for t in turnos)
-                obj_terms.append(trabalha * -1000) # Penalização gigante se recusar
-
-            # Preferência 24h
+                obj_terms.append(trabalha * -2000) # Pedido é sagrado
+            
             if m['pref_24h']:
                 obj_terms.append(shifts_24h[(m['index'], dia)] * 50)
             else:
@@ -229,22 +263,40 @@ if col_act.button("🚀 GERAR ESCALA EQUITATIVA", type="primary"):
 
     # --- RESOLVER ---
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 60.0 # Mais tempo para calcular equidade
+    solver.parameters.max_time_in_seconds = 60.0
+    # Dica para o solver focar em encontrar boas soluções rápido
+    solver.parameters.linearization_level = 0 
     status = solver.Solve(model)
 
     if status in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-        st.success("✅ Escala Equitativa Gerada!")
+        st.success("✅ Escala Nivelada com Sucesso!")
         
         dados_grelha = []
         stats = []
         pedidos_recusados = []
-        
-        # Identificar colunas de Fim de Semana para o Styler
         fds_cols = [str(d_idx + 1) for d_idx, d in enumerate(datas) if d.weekday() >= 5]
 
-        for m in medicos:
+        # Calcular Médias para mostrar no Dashboard
+        # Extrair valores finais
+        vals_noites = [solver.Value(v) for v in total_noites_medico]
+        vals_fds = [solver.Value(v) for v in total_fds_medico] if total_fds_medico else []
+        avg_noites = sum(vals_noites) / len(vals_noites) if vals_noites else 0
+        avg_fds = sum(vals_fds) / len(vals_fds) if vals_fds else 0
+
+        for idx, m in enumerate(medicos):
             row = {"Médico": m['nome'], "Eq": m['equipa']}
-            n_24h = 0; n_noites = 0; horas_totais = 0
+            n_24h = 0; n_noites_real = 0; n_fds_real = 0
+            horas_totais = solver.Value(total_horas[idx])
+            
+            # Recontar FDS visualmente
+            fds_count = 0
+            for d_idx in range(len(datas)):
+                if datas[d_idx].weekday() == 5: # Sabado
+                    sab = d_idx + 1; dom = d_idx + 2
+                    trab_fds = 0
+                    if dom <= len(datas):
+                        trab_fds = sum(solver.Value(shifts[(m['index'], sab, t)]) + solver.Value(shifts[(m['index'], dom, t)]) for t in turnos)
+                    if trab_fds > 0: fds_count += 1
             
             for d_idx, data_obj in enumerate(datas):
                 dia = d_idx + 1
@@ -253,15 +305,10 @@ if col_act.button("🚀 GERAR ESCALA EQUITATIVA", type="primary"):
                 is_manha = solver.Value(shifts[(m['index'], dia, 'MANHA')])
                 
                 label = ""
-                
-                if is_dia and is_noite:
-                    label = "DN"; n_24h += 1; horas_totais += 24
-                elif is_dia:
-                    label = "D"; horas_totais += 12
-                elif is_noite:
-                    label = "N"; n_noites += 1; horas_totais += 12
-                elif is_manha:
-                    label = "M"; horas_totais += 6
+                if is_dia and is_noite: label = "DN"; n_24h += 1
+                elif is_dia: label = "D"
+                elif is_noite: label = "N"; n_noites_real += 1
+                elif is_manha: label = "M"
                 
                 if label == "":
                     if (m['nome'], dia) in hard_ausencias:
@@ -274,36 +321,31 @@ if col_act.button("🚀 GERAR ESCALA EQUITATIVA", type="primary"):
                         pedidos_recusados.append(f"{m['nome']} (Dia {dia})")
 
                 row[str(dia)] = label
-            
-            # Correção do contrato None -> 0
-            contrato_val = m.get('contrato')
-            if contrato_val is None: contrato_val = 0
-            
-            horas_contrato_mes = contrato_val * 4 
-            horas_extra = horas_totais - horas_contrato_mes
+
+            contrato_val = m.get('contrato') or 0
+            horas_extra = horas_totais - (contrato_val * 4)
             
             dados_grelha.append(row)
             stats.append({
                 "Médico": m['nome'], 
-                "Horas Totais": horas_totais,
-                "Horas Extra": horas_extra,
-                "Noites": n_noites + n_24h
+                "Noites": n_noites_real + n_24h,
+                "FDS": fds_count,
+                "Horas": horas_totais,
+                "Delta Noites": (n_noites_real + n_24h) - avg_noites, # Desvio da média
+                "Delta FDS": fds_count - avg_fds
             })
 
         st.subheader(f"Mapa Mensal - {calendar.month_name[mes]} {ano}")
+        if pedidos_recusados: st.warning(f"⚠️ Pedidos Recusados: {', '.join(pedidos_recusados)}")
         
-        if pedidos_recusados:
-            st.warning(f"⚠️ **Pedidos Recusados:** {', '.join(pedidos_recusados)}")
-
         df_grelha = pd.DataFrame(dados_grelha)
         
-        # --- STYLING AVANÇADO ---
         def highlight_cells(val):
             style = ''
-            if val == 'DN': style = 'background-color: #ff4d4d; color: white; font-weight: bold' # Vermelho forte
-            elif val == 'N': style = 'background-color: #4da6ff; color: white' # Azul forte
-            elif val == 'D': style = 'background-color: #85e085; color: black' # Verde
-            elif val == 'M': style = 'background-color: #fff5cc; color: black' # Amarelo
+            if val == 'DN': style = 'background-color: #ff4d4d; color: white; font-weight: bold'
+            elif val == 'N': style = 'background-color: #4da6ff; color: white'
+            elif val == 'D': style = 'background-color: #85e085; color: black'
+            elif val == 'M': style = 'background-color: #fff5cc; color: black'
             elif val == 'FER': style = 'background-color: #ffd700; color: black; font-weight: bold'
             elif val == 'CIT': style = 'background-color: #d8bfd8; color: black'
             elif val == 'CGS': style = 'background-color: #a9a9a9; color: white; text-decoration: line-through'
@@ -311,39 +353,25 @@ if col_act.button("🚀 GERAR ESCALA EQUITATIVA", type="primary"):
             return style
 
         styler = df_grelha.style.applymap(highlight_cells)
-        
-        # Destacar Fins de Semana com cinzento escuro e borda
-        # Nota: O Pandas Styler pode variar dependendo da versão, mas isto funciona na maioria.
-        styler.set_properties(subset=fds_cols, **{
-            'background-color': '#e0e0e0', # Cinzento mais escuro
-            'border-left': '2px solid #333',
-            'border-right': '2px solid #333',
-            'font-weight': 'bold'
-        })
-
+        styler.set_properties(subset=fds_cols, **{'background-color': '#e0e0e0', 'border-left': '2px solid #333', 'border-right': '2px solid #333'})
         st.dataframe(styler, use_container_width=True)
         
         col1, col2 = st.columns([2, 1])
         with col1:
-            st.subheader("⚖️ Análise de Equidade")
+            st.subheader("⚖️ Indicadores de Desvio (Ideal = 0)")
             df_stats = pd.DataFrame(stats).set_index("Médico")
             
-            # Calcular o desvio para mostrar quão justa é a escala
-            media_horas = df_stats['Horas Totais'].mean()
-            df_stats['Desvio da Média'] = df_stats['Horas Totais'] - media_horas
-            
-            def color_desvio(val):
-                # Se desvio for pequeno (-6 a +6h), é verde (ótimo)
-                if abs(val) <= 6: return 'color: green; font-weight: bold'
-                # Se for grande, vermelho
-                return 'color: red; font-weight: bold'
+            # Colorir desvios
+            def color_delta(val):
+                if abs(val) < 1.0: return 'color: green; font-weight: bold' # Desvio mínimo
+                if abs(val) < 2.0: return 'color: orange; font-weight: bold'
+                return 'color: red; font-weight: bold' # Desvio grave
 
-            st.dataframe(df_stats.style.applymap(color_desvio, subset=['Desvio da Média']), use_container_width=True)
+            st.dataframe(df_stats.style.applymap(color_delta, subset=['Delta Noites', 'Delta FDS']), use_container_width=True)
             
         with col2:
-            st.info("Legenda:\n- **Colunas Cinzentas**: Fins de Semana\n- **Desvio**: Diferença entre as horas do médico e a média da equipa.")
-            st.download_button("📥 Baixar CSV", df_grelha.to_csv().encode('utf-8'), "escala_equitativa.csv")
+            st.info(f"**Médias da Equipa:**\n- Noites: {avg_noites:.1f}\n- Fim de Semana: {avg_fds:.1f}\n\nO objetivo é que o 'Delta' de todos esteja perto de 0.")
+            st.download_button("📥 Baixar CSV", df_grelha.to_csv().encode('utf-8'), "escala_nivelada.csv")
 
     else:
-        st.error("❌ Impossível gerar escala. Causa provável: Regras de Staff muito altas (3 em tudo) para o nº de médicos disponíveis.")
-        st.warning("Tente adicionar mais médicos na tabela ou reduzir os requisitos de 'Manhã' na barra lateral.")
+        st.error("❌ Impossível gerar. Tente relaxar as regras de 'Máx. Noites/Semana' ou adicionar mais médicos.")
