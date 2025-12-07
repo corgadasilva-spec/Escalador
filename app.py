@@ -25,7 +25,7 @@ with st.sidebar:
     st.divider()
     st.header("⚖️ Limites de Segurança")
     max_noites_semana = st.number_input("Máx. Noites/Semana", value=2)
-    max_turnos_semana = st.number_input("Máx. Turnos/Semana (DN=2)", value=5) # Aumentei para 5 para permitir DNs
+    max_turnos_semana = st.number_input("Máx. Turnos/Semana (DN=2)", value=5)
     regra_fds_unico = st.checkbox("🚫 Fim de Semana '1 Tiro'", value=True)
 
 # Calcular dias
@@ -40,7 +40,6 @@ tab_equipa, tab_ausencias = st.tabs(["👥 Equipa (Quem quer 24h?)", "✈️ Aus
 with tab_equipa:
     st.markdown("**Instrução:** Marque a caixa `Prefere 24h` para quem deve fazer D+N seguido.")
     default_medicos = [
-        # Equipas A, B, C equilibradas
         {"nome": "Dr. Silva", "equipa": "A", "contrato": 40, "pref_24h": True, "ativo": True},
         {"nome": "Dra. Ana", "equipa": "B", "contrato": 40, "pref_24h": False, "ativo": True},
         {"nome": "Dr. Costa", "equipa": "C", "contrato": 40, "pref_24h": True, "ativo": True},
@@ -50,7 +49,6 @@ with tab_equipa:
         {"nome": "Dr. Pedro", "equipa": "B", "contrato": 40, "pref_24h": False, "ativo": True},
         {"nome": "Dra. Sofia", "equipa": "C", "contrato": 40, "pref_24h": True, "ativo": True},
         {"nome": "Dra. Joana", "equipa": "C", "contrato": 40, "pref_24h": True, "ativo": True},
-        # Rotativos / Internos
         {"nome": "Dr. Rui", "equipa": "Rot", "contrato": 40, "pref_24h": False, "ativo": True},
         {"nome": "Dra. Marta", "equipa": "Rot", "contrato": 40, "pref_24h": False, "ativo": True},
         {"nome": "Dr. Tiago", "equipa": "Rot", "contrato": 40, "pref_24h": True, "ativo": True},
@@ -58,7 +56,6 @@ with tab_equipa:
         {"nome": "Dr. Bruno", "equipa": "Rot", "contrato": 40, "pref_24h": True, "ativo": True},
         {"nome": "Dr. Lucas", "equipa": "Rot", "contrato": 40, "pref_24h": False, "ativo": True},
         {"nome": "Dra. Carla", "equipa": "Rot", "contrato": 40, "pref_24h": True, "ativo": True},
-        # Tarefeiros (Geralmente fazem 24h)
         {"nome": "Dr. Tarefeiro 1", "equipa": "Ext", "contrato": 0, "pref_24h": True, "ativo": True},
         {"nome": "Dr. Tarefeiro 2", "equipa": "Ext", "contrato": 0, "pref_24h": True, "ativo": True},
         {"nome": "Dr. Tarefeiro 3", "equipa": "Ext", "contrato": 0, "pref_24h": True, "ativo": True},
@@ -109,15 +106,21 @@ if col_act.button("🚀 GERAR ESCALA (PRIORIDADE 24H)", type="primary"):
             for t in turnos:
                 shifts[(m['index'], dia, t)] = model.NewBoolVar(f"s_{m['index']}_{dia}_{t}")
 
-    # Variáveis Auxiliares 24h (DIA + NOITE no mesmo dia)
+    # Variáveis Auxiliares 24h - CÓDIGO SEGURO
     shifts_24h = {}
     for m in medicos:
         for d_idx, _ in enumerate(datas):
             dia = d_idx + 1
             shifts_24h[(m['index'], dia)] = model.NewBoolVar(f"is_24h_{m['index']}_{dia}")
-            # Se fizer DIA e NOITE -> is_24h = True
-            model.Add(shifts[(m['index'], dia, 'DIA')] + shifts[(m['index'], dia, 'NOITE')] == 2).OnlyEnforceIf(shifts_24h[(m['index'], dia)])
-            model.Add(shifts[(m['index'], dia, 'DIA')] + shifts[(m['index'], dia, 'NOITE')] < 2).OnlyEnforceIf(shifts_24h[(m['index'], dia)].Not())
+            
+            # Atalhos para evitar linhas longas
+            t_dia = shifts[(m['index'], dia, 'DIA')]
+            t_noite = shifts[(m['index'], dia, 'NOITE')]
+            var_24h = shifts_24h[(m['index'], dia)]
+            
+            # Lógica corrigida e partida em linhas menores
+            model.Add(t_dia + t_noite == 2).OnlyEnforceIf(var_24h)
+            model.Add(t_dia + t_noite < 2).OnlyEnforceIf(var_24h.Not())
 
     # --- REGRAS HARD ---
     for d_idx, data_obj in enumerate(datas):
@@ -134,7 +137,7 @@ if col_act.button("🚀 GERAR ESCALA (PRIORIDADE 24H)", type="primary"):
             model.Add(sum(shifts[(m['index'], dia, 'MANHA')] for m in medicos) == num_manha)
 
         for m in medicos:
-            # Incompatibilidades: Manhã é exclusiva
+            # Incompatibilidades
             model.Add(shifts[(m['index'], dia, 'MANHA')] + shifts[(m['index'], dia, 'DIA')] <= 1)
             model.Add(shifts[(m['index'], dia, 'MANHA')] + shifts[(m['index'], dia, 'NOITE')] <= 1)
             
@@ -167,7 +170,7 @@ if col_act.button("🚀 GERAR ESCALA (PRIORIDADE 24H)", type="primary"):
             noites_janela = sum(shifts[(m['index'], d_idx + k + 1, 'NOITE')] for k in range(7))
             model.Add(noites_janela <= max_noites_semana)
 
-        # Máx Turnos / Semana (Um DN conta como 2 turnos)
+        # Máx Turnos / Semana
         for d_idx in range(len(datas) - 6):
             turnos_janela = sum(shifts[(m['index'], d_idx + k + 1, t)] for k in range(7) for t in turnos)
             model.Add(turnos_janela <= max_turnos_semana)
@@ -190,7 +193,10 @@ if col_act.button("🚀 GERAR ESCALA (PRIORIDADE 24H)", type="primary"):
             if datas[d_idx].weekday() == 5: # Sábado
                 sab_idx = d_idx; dom_idx = d_idx + 1
                 if dom_idx < len(datas):
-                    trab_fds = sum(shifts[(m['index'], sab_idx+1, t)] + shifts[(m['index'], dom_idx+1, t)] for t in turnos)
+                    t_sab = sum(shifts[(m['index'], sab_idx+1, t)] for t in turnos)
+                    t_dom = sum(shifts[(m['index'], dom_idx+1, t)] for t in turnos)
+                    trab_fds = t_sab + t_dom
+                    
                     touched = model.NewBoolVar(f"fds_{m['index']}_{sab_idx}")
                     model.Add(trab_fds > 0).OnlyEnforceIf(touched)
                     model.Add(trab_fds == 0).OnlyEnforceIf(touched.Not())
@@ -203,31 +209,27 @@ if col_act.button("🚀 GERAR ESCALA (PRIORIDADE 24H)", type="primary"):
 
     obj_terms = []
 
-    # 1. FORÇAR PREFERÊNCIA 24h (Peso: +/- 2000)
-    # Este peso agora é superior à equidade, para forçar o padrão DN
+    # 1. FORÇAR PREFERÊNCIA 24h
     for m in medicos:
         for d_idx, _ in enumerate(datas):
             dia = d_idx + 1
             if m['pref_24h']:
-                # Ganha MUITOS pontos se fizer 24h
                 obj_terms.append(shifts_24h[(m['index'], dia)] * 2000)
             else:
-                # Perde MUITOS pontos se fizer 24h
                 obj_terms.append(shifts_24h[(m['index'], dia)] * -2000)
             
-            # Pedido de folga
             if (m['nome'], dia) in soft_pedidos:
                 trabalha = sum(shifts[(m['index'], dia, t)] for t in turnos)
-                obj_terms.append(trabalha * -5000) # Máxima prioridade
+                obj_terms.append(trabalha * -5000)
 
-    # 2. Equidade de NOITES (Peso: -500)
+    # 2. Equidade de NOITES
     max_noites = model.NewIntVar(0, 31, 'max_noites')
     min_noites = model.NewIntVar(0, 31, 'min_noites')
     model.AddMaxEquality(max_noites, total_noites_medico)
     model.AddMinEquality(min_noites, total_noites_medico)
     obj_terms.append((max_noites - min_noites) * -500)
 
-    # 3. Equidade de FDS (Peso: -500)
+    # 3. Equidade de FDS
     if total_fds_medico:
         max_fds = model.NewIntVar(0, 5, 'max_fds')
         min_fds = model.NewIntVar(0, 5, 'min_fds')
@@ -250,15 +252,10 @@ if col_act.button("🚀 GERAR ESCALA (PRIORIDADE 24H)", type="primary"):
         pedidos_recusados = []
         fds_cols = [str(d_idx + 1) for d_idx, d in enumerate(datas) if d.weekday() >= 5]
         
-        # Dashboard Stats
-        vals_noites = [solver.Value(v) for v in total_noites_medico]
-        avg_noites = sum(vals_noites) / len(vals_noites) if vals_noites else 0
-
         for idx, m in enumerate(medicos):
             row = {"Médico": m['nome'], "Eq": m['equipa']}
             n_24h_real = 0; n_noites_real = 0
             
-            # Calcular Horas
             horas_totais = 0
             for d_idx, _ in enumerate(datas):
                 dia = d_idx + 1
@@ -277,52 +274,4 @@ if col_act.button("🚀 GERAR ESCALA (PRIORIDADE 24H)", type="primary"):
                         tipo = hard_ausencias[(m['nome'], dia)]
                         label = "FER" if tipo == "Férias" else ("CIT" if tipo == "CIT" else "CGS")
                     elif (m['nome'], dia) in soft_pedidos: label = "PED"
-                else:
-                    if (m['nome'], dia) in soft_pedidos: pedidos_recusados.append(f"{m['nome']} ({dia})")
-
-                row[str(dia)] = label
-
-            contrato_val = m.get('contrato') or 0
-            horas_extra = horas_totais - (contrato_val * 4)
-            
-            dados_grelha.append(row)
-            stats.append({
-                "Médico": m['nome'], 
-                "Pref 24h": "Sim" if m['pref_24h'] else "Não",
-                "Turnos 24h": n_24h_real,
-                "Noites Totais": n_noites_real + n_24h_real,
-                "Horas Extra": horas_extra
-            })
-
-        st.subheader(f"Mapa Mensal - {calendar.month_name[mes]} {ano}")
-        if pedidos_recusados: st.warning(f"Pedidos Recusados: {pedidos_recusados}")
-        
-        df_grelha = pd.DataFrame(dados_grelha)
-        
-        def highlight_cells(val):
-            style = ''
-            if val == 'DN': style = 'background-color: #ff4d4d; color: white; font-weight: bold'
-            elif val == 'N': style = 'background-color: #4da6ff; color: white'
-            elif val == 'D': style = 'background-color: #85e085; color: black'
-            elif val == 'M': style = 'background-color: #fff5cc; color: black'
-            elif val == 'FER': style = 'background-color: #ffd700; color: black'
-            elif val == 'CIT': style = 'background-color: #d8bfd8; color: black'
-            elif val == 'CGS': style = 'background-color: #a9a9a9; color: white; text-decoration: line-through'
-            elif val == 'PED': style = 'background-color: #ccffcc; color: black; border: 2px dashed green'
-            return style
-
-        styler = df_grelha.style.applymap(highlight_cells)
-        styler.set_properties(subset=fds_cols, **{'background-color': '#e0e0e0', 'border-left': '2px solid #333', 'border-right': '2px solid #333'})
-        st.dataframe(styler, use_container_width=True)
-        
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.subheader("📊 Análise 24h")
-            # Mostrar claramente quem pediu 24h e quantos teve
-            st.dataframe(pd.DataFrame(stats).set_index("Médico"), use_container_width=True)
-            
-        with col2:
-            st.download_button("📥 Baixar CSV", df_grelha.to_csv().encode('utf-8'), "escala_24h.csv")
-
-    else:
-        st.error("❌ Não foi possível gerar. Tente relaxar o 'Máx. Turnos/Semana' na barra lateral (DN conta como 2 turnos!).")
+                else
